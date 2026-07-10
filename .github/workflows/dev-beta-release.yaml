@@ -627,3 +627,34 @@ jobs:
             exit 1
           fi
           echo "$health_json"
+
+  # Tự động redeploy trên Dokploy (datmarketing.edu.vn) sau khi image :beta được publish.
+  # Chỉ chạy trên fork quocdatads4/goclaw.
+  # Cần tạo secret DOKPLOY_WEBHOOK_URL trong repo settings với giá trị:
+  #   https://dokploy.datmarketing.edu.vn/api/webhook/9FyS3auEFuEtcWGoW5jyy
+  deploy_datmarketing:
+    needs: [beta_version, promote_beta_aliases]
+    if: needs.beta_version.outputs.released == 'true' && github.repository == 'quocdatads4/goclaw'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Dokploy redeploy
+        env:
+          DOKPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
+          TAG: ${{ needs.beta_version.outputs.tag }}
+        run: |
+          if [[ -z "$DOKPLOY_WEBHOOK_URL" ]]; then
+            echo "::warning::DOKPLOY_WEBHOOK_URL secret not configured; skipping Dokploy redeploy."
+            echo "To enable: add secret DOKPLOY_WEBHOOK_URL = https://dokploy.datmarketing.edu.vn/api/webhook/9FyS3auEFuEtcWGoW5jyy"
+            exit 0
+          fi
+          echo "Triggering Dokploy redeploy for image tag ${TAG}..."
+          http_code=$(curl -fsS -w "%{http_code}" -o /tmp/dokploy_resp.txt -X POST "$DOKPLOY_WEBHOOK_URL" \
+            -H "Content-Type: application/json" 2>&1 || echo "000")
+          echo "HTTP Status: $http_code"
+          cat /tmp/dokploy_resp.txt 2>/dev/null || true
+          if [[ "$http_code" =~ ^2 ]]; then
+            echo "Dokploy redeploy triggered successfully."
+          else
+            echo "::warning::Dokploy webhook returned HTTP $http_code — check if the URL is correct."
+          fi
