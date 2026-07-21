@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   goclaw:
-    image: goclaw-dokploy:${GOCLAW_VERSION:-main}
+    image: goclaw-dokploy:${GOCLAW_VERSION:-dev}
     build:
       context: .
       dockerfile: Dockerfile
